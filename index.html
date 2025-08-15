@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Мій Словник</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://apis.google.com/js/api.js"></script>
+</head>
+<body>
+    <header>
+        <h1>Мій Словник</h1>
+        <div id="auth-container">
+            <button id="authorize-button" class="google-auth-btn">Увійти через Google</button>
+            <div id="user-info" style="display: none;">
+                <img id="user-avatar" alt="User avatar">
+                <span id="user-name"></span>
+                <button id="signout-button" class="google-auth-btn">Вийти</button>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <aside id="sidebar">
+            <div id="search-container">
+                <input type="text" id="searchInput" placeholder="Шукати слово...">
+            </div>
+            <nav id="main-nav">
+                <button id="add-word-btn">Додати слово</button>
+                <button id="add-folder-btn">Додати папку</button>
+                <button id="study-cards-btn">Картки для вивчення</button>
+            </nav>
+            <hr>
+            <div id="data-management">
+                <button id="export-btn">Експорт словника</button>
+                <label for="import-file" class="import-label">
+                    <input type="file" id="import-file" accept=".json">
+                    Імпорт словника
+                </label>
+            </div>
+        </aside>
+
+        <main id="content-area"></main>
+    </div>
+
+    <footer>
+        <p>&copy; 2024 Мій Словник. Усі права захищені.</p>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>
