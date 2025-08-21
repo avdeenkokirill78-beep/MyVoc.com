@@ -934,7 +934,6 @@ importFile.addEventListener('change', importData);
 authorizeButton.addEventListener('click', handleAuthClick);
 signoutButton.addEventListener('click', handleSignoutClick);
 
-// ЦЕЙ БЛОК БУВ ПРОПУЩЕНИЙ В МИНУЛІЙ ВЕРСІЇ
 // Запускаємо ініціалізацію додатка після завантаження DOM
 document.addEventListener('DOMContentLoaded', () => {
     loadData();
