@@ -194,7 +194,6 @@ function displayWords(words, folderId) {
                     ${word.synonyms ? `<p><strong>Синоніми:</strong> ${word.synonyms}</p>` : ''}
                     ${word.sentence ? `<p><strong>Речення:</strong> ${word.sentence}</p>` : ''}
                     ${word.antonyms ? `<p><strong>Антоніми:</strong> ${word.antonyms}</p>` : ''}
-                    ${word.notes ? `<p><strong>Примітки:</strong> ${word.notes}</p>` : ''}
                     <p><strong>Статус:</strong> ${word.learned ? 'Вивчене ✅' : 'Невивчене ❌'}</p>
                     <div class="word-card-actions">
                         <button class="toggle-learned-btn" data-word-id="${word.id}">${word.learned ? 'Зробити невивченим' : 'Зробити вивченим'}</button>
@@ -498,15 +497,26 @@ function toggleLearnedStatus(wordId) {
     }
 }
 
+// Оновлена функція renderFormWord
 function editWordForm(wordId) {
     const wordToEdit = dictionary.words.find(w => w.id == wordId);
     if (!wordToEdit) return;
+    
+    // Формуємо опції для селектора папок
+    const folderOptions = dictionary.folders.map(folder => {
+        const selected = (folder.id == wordToEdit.folderId) ? 'selected' : '';
+        return `<option value="${folder.id}" ${selected}>${folder.name}</option>`;
+    }).join('');
 
     contentArea.innerHTML = `
         <button id="back-to-main" class="back-btn">&#8592; Назад</button>
         <h2>Редагувати слово "${wordToEdit.word}"</h2>
         <form id="edit-word-form">
             <p>Поля з позначкою * є обов'язковими.</p>
+            <label for="wordFolder">Папка:</label>
+            <select id="wordFolder" name="wordFolder">
+                ${folderOptions}
+            </select>
             <label for="wordInput">Слово*:</label>
             <input type="text" id="wordInput" name="word" value="${wordToEdit.word}" required>
             <label for="translationInput">Переклад*:</label>
@@ -533,6 +543,7 @@ function editWordForm(wordId) {
     document.getElementById('edit-word-form').addEventListener('submit', (event) => {
         event.preventDefault();
         const learnedStatus = document.getElementById('learnedStatus').checked;
+        const newFolderId = document.getElementById('wordFolder').value; // Зчитуємо ID нової папки
         
         const updatedWord = {
             id: wordToEdit.id,
@@ -544,7 +555,7 @@ function editWordForm(wordId) {
             antonyms: document.getElementById('antonymsInput').value,
             notes: document.getElementById('notesInput').value,
             learned: learnedStatus,
-            folderId: wordToEdit.folderId
+            folderId: newFolderId // Оновлюємо id папки
         };
         const index = dictionary.words.findIndex(w => w.id == wordId);
         if (index !== -1) {
