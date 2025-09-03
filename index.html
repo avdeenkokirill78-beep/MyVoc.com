@@ -5,18 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Мій Словник</title>
     <link rel="stylesheet" href="style.css">
-    <script src="https://apis.google.com/js/api.js"></script>
+    
+    <script type="module" src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js"></script>
+    <script type="module" src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js"></script>
+    <script type="module" src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js"></script>
+
+    <script type="module" src="./script.js" defer></script>
 </head>
 <body>
     <header>
         <h1>Мій Словник</h1>
         <div id="auth-container">
-            <button id="authorize-button" class="google-auth-btn">Увійти через Google</button>
-            <div id="user-info" style="display: none;">
-                <img id="user-avatar" alt="User avatar">
-                <span id="user-name"></span>
-                <button id="signout-button" class="google-auth-btn">Вийти</button>
-            </div>
+        <button id="auth-btn">Увійти через Google</button>
         </div>
     </header>
 
@@ -46,8 +46,6 @@
     <footer>
         <p>&copy; 2025 Мій Словник. Усі права захищені.</p>
     </footer>
-
-    <script src="script.js"></script>
 </body>
-
 </html>
+
