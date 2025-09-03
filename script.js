@@ -1,46 +1,137 @@
+// Import the functions you need from the SDKs you need
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+
+// Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyD9SsU8Vo6KZ6tVgWLgMAnFvxSjkdWFvSs",
+  authDomain: "dictionary-b9011.firebaseapp.com",
+  projectId: "dictionary-b9011",
+  storageBucket: "dictionary-b9011.firebasestorage.app",
+  messagingSenderId: "903569261596",
+  appId: "1:903569261596:web:e64458f595c84af01a4bd9",
+  measurementId: "G-44VP97P941"
+};
+
 // Global variables and references to HTML elements
-const addWordBtn = document.getElementById('add-word-btn');
-const addFolderBtn = document.getElementById('add-folder-btn');
-const studyCardsBtn = document.getElementById('study-cards-btn');
-const contentArea = document.getElementById('content-area');
-const exportBtn = document.getElementById('export-btn');
-const importFile = document.getElementById('import-file');
-
-// Google Auth elements
-const authorizeButton = document.getElementById('authorize-button');
-const signoutButton = document.getElementById('signout-button');
-const userInfoDiv = document.getElementById('user-info');
-const userAvatar = document.getElementById('user-avatar');
-const userName = document.getElementById('user-name');
-
-// Google Drive API variables
-const CLIENT_ID = '391632231069-01vt7rckekqcqqao3129193fhpkq96uv.apps.googleusercontent.com'; // <-- ЗАМІНИ НА СВІЙ CLIENT ID
-const API_KEY = 'AIzaSyDL9gCw0k1L98Ta64QzBOGsaijGOG-TYNQ';   // <-- ЗАМІНИ НА СВІЙ API KEY
-const SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile';
-
-const DICTIONARY_FOLDER_NAME = 'Мій Словник';
-const DICTIONARY_FILE_NAME = 'my_dictionary.json';
-let dictionaryFileId = null; // ID файлу на Google Drive
-
-// The main object where we store all the data
+let addWordBtn, addFolderBtn, studyCardsBtn, contentArea, exportBtn, importFile;
+let authBtn, searchInput;
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
 let dictionary = {
     folders: [],
     words: []
 };
+let userId = null;
+
+// Initial rendering and data loading
+document.addEventListener('DOMContentLoaded', () => {
+    // Присвоєння змінних елементам DOM
+    addWordBtn = document.getElementById('add-word-btn');
+    addFolderBtn = document.getElementById('add-folder-btn');
+    studyCardsBtn = document.getElementById('study-cards-btn');
+    contentArea = document.getElementById('content-area');
+    exportBtn = document.getElementById('export-btn');
+    importFile = document.getElementById('import-file');
+    authBtn = document.getElementById('auth-btn');
+    searchInput = document.getElementById('searchInput');
+
+    // Обробники подій
+    authBtn.addEventListener('click', () => {
+        if (userId) {
+            signOut(auth);
+        } else {
+            const provider = new GoogleAuthProvider();
+            signInWithPopup(auth, provider);
+        }
+    });
+
+    addWordBtn.addEventListener('click', () => {
+        if (!userId) {
+            alert('Будь ласка, увійдіть, щоб додавати слова!');
+            return;
+        }
+        renderContent('addWord');
+    });
+
+    addFolderBtn.addEventListener('click', () => {
+        if (!userId) {
+            alert('Будь ласка, увійдіть, щоб додавати папки!');
+            return;
+        }
+        renderContent('addFolder');
+    });
+
+    studyCardsBtn.addEventListener('click', () => {
+        if (!userId) {
+            alert('Будь ласка, увійдіть, щоб вивчати слова!');
+            return;
+        }
+        renderStudyCards();
+    });
+
+    exportBtn.addEventListener('click', exportData);
+    importFile.addEventListener('change', importData);
+
+    searchInput.addEventListener('input', (event) => {
+        const query = event.target.value;
+        if (query.length > 0) {
+            renderSearchResults(query);
+        } else {
+            renderFolders();
+        }
+    });
+
+    renderContent('main');
+});
 
 // Functions to work with data (saving and loading)
 function saveData() {
-    localStorage.setItem('myDictionary', JSON.stringify(dictionary));
-    // Зберігаємо також на Google Drive, якщо користувач увійшов
-    if (gapi.auth2 && gapi.auth2.getAuthInstance().isSignedIn.get()) {
-        saveFileToDrive();
+    if (userId) {
+        localStorage.setItem(`myDictionary_${userId}`, JSON.stringify(dictionary));
     }
 }
 
 function loadData() {
-    const storedData = localStorage.getItem('myDictionary');
-    if (storedData) {
-        dictionary = JSON.parse(storedData);
+    if (userId) {
+        const storedData = localStorage.getItem(`myDictionary_${userId}`);
+        if (storedData) {
+            dictionary = JSON.parse(storedData);
+        }
+    }
+}
+
+// Firebase Synchronization functions
+async function saveToFirebase() {
+    if (!userId) return;
+    try {
+        await setDoc(doc(db, 'users', userId), {
+            folders: dictionary.folders,
+            words: dictionary.words,
+        });
+        console.log('Дані успішно синхронізовано з Firebase.');
+    } catch (e) {
+        console.error('Помилка при синхронізації з Firebase:', e);
+    }
+}
+
+async function loadFromFirebase() {
+    if (!userId) return;
+    try {
+        const docRef = doc(db, 'users', userId);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+            const firebaseData = docSnap.data();
+            dictionary = firebaseData;
+            saveData();
+        } else {
+            console.log('Дані користувача не знайдено в Firebase. Використовуємо локальні або нові.');
+        }
+        renderFolders();
+    } catch (e) {
+        console.error('Помилка при завантаженні з Firebase:', e);
     }
 }
 
@@ -62,7 +153,7 @@ function renderFolders() {
     contentArea.innerHTML = `<h2>Твої папки</h2>`;
     const folderList = document.createElement('ul');
     folderList.classList.add('folder-list');
-    
+
     if (dictionary.folders.length === 0) {
         contentArea.innerHTML += `<p>Папок ще немає. Створи свою першу папку!</p>`;
         const createFolderButton = document.createElement('button');
@@ -125,7 +216,7 @@ function renderFolderContent(folderId) {
         </div>
         <div id="words-list"></div>
     `;
-    
+
     document.getElementById('back-to-main').addEventListener('click', () => {
         renderFolders();
     });
@@ -157,6 +248,7 @@ function markAllAsLearned(folderId) {
         }
     });
     saveData();
+    saveToFirebase();
     renderFolderContent(folderId);
 }
 
@@ -167,6 +259,7 @@ function markAllAsUnlearned(folderId) {
         }
     });
     saveData();
+    saveToFirebase();
     renderFolderContent(folderId);
 }
 
@@ -181,7 +274,7 @@ function displayWords(words, folderId) {
 
     const wordsListDiv = document.getElementById('words-list');
     wordsListDiv.innerHTML = '';
-    
+
     if (words.length === 0) {
         wordsListDiv.innerHTML = `<p>У цій папці поки немає слів. Додай нові слова!</p>`;
     } else {
@@ -203,7 +296,7 @@ function displayWords(words, folderId) {
                 </div>
             `;
         });
-        
+
         document.querySelectorAll('.edit-word-btn').forEach(button => {
             button.addEventListener('click', (event) => {
                 const wordIdToEdit = event.target.dataset.wordId;
@@ -228,7 +321,7 @@ function displayWords(words, folderId) {
 
 function renderAddWordForm() {
     const folders = dictionary.folders;
-    
+
     let htmlContent = `<button id="back-to-main" class="back-btn">&#8592; Назад</button>`;
 
     if (folders.length === 0) {
@@ -268,7 +361,7 @@ function renderAddWordForm() {
     }
 
     contentArea.innerHTML = htmlContent;
-    
+
     document.getElementById('back-to-main').addEventListener('click', () => {
         renderFolders();
     });
@@ -452,6 +545,7 @@ function handleAddWord(event) {
 
     dictionary.words.push(newWord);
     saveData();
+    saveToFirebase();
     renderFolders();
     alert('Слово додано!');
 }
@@ -465,6 +559,7 @@ function handleAddFolder(event) {
     };
     dictionary.folders.push(newFolder);
     saveData();
+    saveToFirebase();
     renderFolders();
     alert(`Папку "${newFolder.name}" створено!`);
 }
@@ -474,6 +569,7 @@ function deleteFolder(folderId) {
         dictionary.words = dictionary.words.filter(word => word.folderId != folderId);
         dictionary.folders = dictionary.folders.filter(folder => folder.id != folderId);
         saveData();
+        saveToFirebase();
         renderFolders();
         alert('Папку видалено.');
     }
@@ -484,6 +580,7 @@ function deleteWord(wordId, folderId) {
     if (confirm(`Ти впевнений, що хочеш видалити слово "${wordToDelete.word}"?`)) {
         dictionary.words = dictionary.words.filter(w => w.id != wordId);
         saveData();
+        saveToFirebase();
         renderFolderContent(folderId);
         alert('Слово видалено.');
     }
@@ -494,15 +591,14 @@ function toggleLearnedStatus(wordId) {
     if (wordObject) {
         wordObject.learned = !wordObject.learned;
         saveData();
+        saveToFirebase();
     }
 }
 
-// Оновлена функція renderFormWord
 function editWordForm(wordId) {
     const wordToEdit = dictionary.words.find(w => w.id == wordId);
     if (!wordToEdit) return;
-    
-    // Формуємо опції для селектора папок
+
     const folderOptions = dictionary.folders.map(folder => {
         const selected = (folder.id == wordToEdit.folderId) ? 'selected' : '';
         return `<option value="${folder.id}" ${selected}>${folder.name}</option>`;
@@ -543,8 +639,7 @@ function editWordForm(wordId) {
     document.getElementById('edit-word-form').addEventListener('submit', (event) => {
         event.preventDefault();
         const learnedStatus = document.getElementById('learnedStatus').checked;
-        const newFolderId = document.getElementById('wordFolder').value; // Зчитуємо ID нової папки
-        
+        const newFolderId = document.getElementById('wordFolder').value;
         const updatedWord = {
             id: wordToEdit.id,
             word: document.getElementById('wordInput').value,
@@ -555,12 +650,13 @@ function editWordForm(wordId) {
             antonyms: document.getElementById('antonymsInput').value,
             notes: document.getElementById('notesInput').value,
             learned: learnedStatus,
-            folderId: newFolderId // Оновлюємо id папки
+            folderId: newFolderId
         };
         const index = dictionary.words.findIndex(w => w.id == wordId);
         if (index !== -1) {
             dictionary.words[index] = updatedWord;
             saveData();
+            saveToFirebase();
             renderFolderContent(updatedWord.folderId);
             alert('Слово оновлено!');
         }
@@ -593,6 +689,7 @@ function editFolderForm(folderId) {
         if (index !== -1) {
             dictionary.folders[index].name = newName;
             saveData();
+            saveToFirebase();
             renderFolders();
             alert('Назву папки оновлено!');
         }
@@ -601,104 +698,6 @@ function editFolderForm(folderId) {
     document.getElementById('cancel-edit-folder-btn').addEventListener('click', () => {
         renderFolders();
     });
-}
-
-// Initial event handlers
-addWordBtn.addEventListener('click', () => {
-    renderContent('addWord');
-});
-addFolderBtn.addEventListener('click', () => {
-    renderContent('addFolder');
-});
-studyCardsBtn.addEventListener('click', () => {
-    renderStudyCards();
-});
-
-const searchInput = document.getElementById('searchInput');
-searchInput.addEventListener('input', (event) => {
-    const query = event.target.value;
-    if (query.length > 0) {
-        renderSearchResults(query);
-    } else {
-        renderFolders();
-    }
-});
-
-function renderSearchResults(query) {
-    contentArea.innerHTML = `<button id="back-to-main" class="back-btn">&#8592; Назад</button><h2>Результати пошуку для "${query}"</h2>`;
-    
-    document.getElementById('back-to-main').addEventListener('click', () => {
-        renderFolders();
-    });
-    
-    const searchResultsList = document.createElement('div');
-    searchResultsList.id = 'search-results';
-    const lowerCaseQuery = query.toLowerCase();
-
-    const matchingWords = dictionary.words.filter(word => 
-        (word.word && word.word.toLowerCase().includes(lowerCaseQuery)) ||
-        (word.translation && word.translation.toLowerCase().includes(lowerCaseQuery)) ||
-        (word.pronunciation && word.pronunciation.toLowerCase().includes(lowerCaseQuery))
-    );
-
-    if (matchingWords.length === 0) {
-        searchResultsList.innerHTML = `<p>Нічого не знайдено.</p>`;
-    } else {
-        const startsWithWords = matchingWords.filter(word =>
-            (word.word && word.word.toLowerCase().startsWith(lowerCaseQuery)) ||
-            (word.translation && word.translation.toLowerCase().startsWith(lowerCaseQuery)) ||
-            (word.pronunciation && word.pronunciation.toLowerCase().startsWith(lowerCaseQuery))
-        );
-        const includesWords = matchingWords.filter(word => !startsWithWords.includes(word));
-        
-        const sortedWords = startsWithWords.concat(includesWords);
-
-        sortedWords.forEach(word => {
-            searchResultsList.innerHTML += `
-                <div class="word-card">
-                    <h3>${word.word}</h3>
-                    <p><strong>Переклад:</strong> ${word.translation}</p>
-                    ${word.pronunciation ? `<p><strong>Вимова:</strong> ${word.pronunciation}</p>` : ''}
-                    ${word.synonyms ? `<p><strong>Синоніми:</strong> ${word.synonyms}</p>` : ''}
-                    ${word.sentence ? `<p><strong>Речення:</strong> ${word.sentence}</p>` : ''}
-                    ${word.antonyms ? `<p><strong>Антоніми:</strong> ${word.antonyms}</p>` : ''}
-                    <p><strong>Статус:</strong> ${word.learned ? 'Вивчене ✅' : 'Невивчене ❌'}</p>
-                    <div class="word-card-actions">
-                        <button class="toggle-learned-btn" data-word-id="${word.id}">${word.learned ? 'Зробити невивченим' : 'Зробити вивченим'}</button>
-                        <button class="edit-word-btn" data-word-id="${word.id}">Редагувати</button>
-                        <button class="delete-word-btn" data-word-id="${word.id}">Видалити слово</button>
-                    </div>
-                </div>
-            `;
-        });
-        
-        searchResultsList.querySelectorAll('.edit-word-btn').forEach(button => {
-            button.addEventListener('click', (event) => {
-                const wordIdToEdit = event.target.dataset.wordId;
-                editWordForm(wordIdToEdit);
-            });
-        });
-        searchResultsList.querySelectorAll('.delete-word-btn').forEach(button => {
-            button.addEventListener('click', (event) => {
-                const wordIdToDelete = event.target.dataset.wordId;
-                const wordToDelete = dictionary.words.find(w => w.id == wordIdToDelete);
-                if (wordToDelete) {
-                    deleteWord(wordIdToDelete, wordToDelete.folderId);
-                } else {
-                    renderSearchResults(query);
-                }
-            });
-        });
-        searchResultsList.querySelectorAll('.toggle-learned-btn').forEach(button => {
-            button.addEventListener('click', (event) => {
-                const wordIdToToggle = event.target.dataset.wordId;
-                toggleLearnedStatus(wordIdToToggle);
-                renderSearchResults(query);
-            });
-        });
-    }
-
-    contentArea.appendChild(searchResultsList);
 }
 
 // Functions for Export and Import
@@ -717,16 +716,22 @@ function exportData() {
 }
 
 function importData(event) {
+    console.log('Крок 1: Запущено функцію importData.');
     const file = event.target.files[0];
     if (!file) {
+        console.log('Крок 2: Файл не обрано.');
         return;
     }
+    console.log('Крок 2: Файл обрано, починаємо читання.');
 
     const reader = new FileReader();
     reader.onload = function(e) {
+        console.log('Крок 3: Файл прочитано. Спроба розбору JSON.');
         try {
             const importedData = JSON.parse(e.target.result);
+            console.log('Крок 4: JSON успішно розібрано. Перевірка формату.');
             if (importedData && importedData.folders && importedData.words) {
+                console.log('Крок 5: Формат даних правильний.');
                 if (confirm('Ви хочете замінити існуючий словник чи додати нові дані? Натисніть "ОК", щоб замінити, або "Скасувати", щоб додати.')) {
                     dictionary = importedData;
                     alert('Словник успішно замінено!');
@@ -736,11 +741,15 @@ function importData(event) {
                     alert('Дані успішно додано до словника!');
                 }
                 saveData();
+                saveToFirebase();
                 renderFolders();
+                console.log('Крок 6: Дані оброблено. Функцію завершено.');
             } else {
+                console.error('Крок 5: Помилка формату даних. Файл не містить об\'єктів folders або words.');
                 alert('Помилка: Некоректний формат файлу. Будь ласка, оберіть файл JSON, експортований з цього додатка.');
             }
         } catch (error) {
+            console.error('Крок 4: Помилка при розборі JSON:', error);
             alert('Помилка при читанні файлу. Будь ласка, переконайтесь, що це дійсний файл JSON.');
         } finally {
             event.target.value = '';
@@ -749,194 +758,22 @@ function importData(event) {
     reader.readAsText(file);
 }
 
-// Функції для Google-авторизації та Drive
-let gapiInitialized = false;
-
-function handleClientLoad() {
-    gapi.load('client:auth2', initClient);
-}
-
-function initClient() {
-    gapi.client.init({
-        apiKey: API_KEY,
-        clientId: CLIENT_ID,
-        scope: SCOPES,
-        discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest']
-    }).then(function () {
-        gapiInitialized = true;
-        gapi.auth2.getAuthInstance().isSignedIn.listen(updateSigninStatus);
-        updateSigninStatus(gapi.auth2.getAuthInstance().isSignedIn.get());
-    });
-}
-
-function updateSigninStatus(isSignedIn) {
-    if (isSignedIn) {
-        authorizeButton.style.display = 'none';
-        userInfoDiv.style.display = 'flex';
-        const profile = gapi.auth2.getAuthInstance().currentUser.get().getBasicProfile();
-        userName.textContent = profile.getName();
-        userAvatar.src = profile.getImageUrl();
-        console.log('User signed in:', profile.getName());
-        
-        syncWithGoogleDrive();
+// Firebase Auth State Listener
+onAuthStateChanged(auth, (user) => {
+    if (user) {
+        userId = user.uid;
+        authBtn.textContent = 'Вийти';
+        loadFromFirebase();
+        console.log('Користувач увійшов:', user.displayName);
     } else {
-        authorizeButton.style.display = 'block';
-        userInfoDiv.style.display = 'none';
-        console.log('User signed out.');
-    }
-}
-
-function handleAuthClick() {
-    gapi.auth2.getAuthInstance().signIn();
-}
-
-function handleSignoutClick() {
-    gapi.auth2.getAuthInstance().signOut();
-}
-
-async function syncWithGoogleDrive() {
-    try {
-        const folderId = await findOrCreateDictionaryFolder();
-        const file = await checkFileExists(folderId);
-
-        if (file) {
-            dictionaryFileId = file.id;
-            const remoteData = await loadFileFromDrive(dictionaryFileId);
-            
-            if (dictionary.words.length === 0 && dictionary.folders.length === 0) {
-                dictionary = remoteData;
-                saveData();
-                renderFolders();
-                alert('Словник успішно завантажено з Google Drive!');
-            } else {
-                if (confirm('Виявлено розбіжності між локальними та хмарними даними. Натисніть "ОК" для об\'єднання, або "Скасувати" для заміни локальних даних хмарними.')) {
-                    mergeData(remoteData);
-                    await saveFileToDrive();
-                    alert('Дані успішно об\'єднано та збережено!');
-                } else {
-                    dictionary = remoteData;
-                    saveData();
-                    renderFolders();
-                    alert('Локальні дані замінено даними з Google Drive!');
-                }
-            }
-        } else {
-            await saveFileToDrive();
-            alert('Словник збережено на Google Drive!');
-        }
-    } catch (error) {
-        console.error('Error during synchronization:', error);
-        alert('Помилка синхронізації з Google Drive. Перевірте консоль для деталей.');
-    }
-}
-
-async function findOrCreateDictionaryFolder() {
-    const response = await gapi.client.drive.files.list({
-        q: `name='${DICTIONARY_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
-        spaces: 'drive',
-        fields: 'files(id)'
-    });
-    
-    let folderId;
-    if (response.result.files.length > 0) {
-        folderId = response.result.files[0].id;
-    } else {
-        const fileMetadata = {
-            'name': DICTIONARY_FOLDER_NAME,
-            'mimeType': 'application/vnd.google-apps.folder'
+        userId = null;
+        authBtn.textContent = 'Увійти через Google';
+        dictionary = {
+            folders: [],
+            words: []
         };
-        const createResponse = await gapi.client.drive.files.create({
-            resource: fileMetadata,
-            fields: 'id'
-        });
-        folderId = createResponse.result.id;
+        saveData();
+        renderFolders();
+        console.log('Користувач вийшов.');
     }
-    return folderId;
-}
-
-async function checkFileExists(folderId) {
-    const response = await gapi.client.drive.files.list({
-        q: `'${folderId}' in parents and name='${DICTIONARY_FILE_NAME}' and trashed=false`,
-        spaces: 'drive',
-        fields: 'files(id, name, modifiedTime)'
-    });
-    return response.result.files[0];
-}
-
-async function saveFileToDrive() {
-    const folderId = await findOrCreateDictionaryFolder();
-    const existingFile = await checkFileExists(folderId);
-
-    const metadata = {
-        name: DICTIONARY_FILE_NAME,
-        parents: [folderId],
-    };
-
-    const content = JSON.stringify(dictionary, null, 2);
-    const blob = new Blob([content], { type: 'application/json' });
-
-    const form = new FormData();
-    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-    form.append('file', blob);
-
-    if (existingFile) {
-        dictionaryFileId = existingFile.id;
-        await fetch(`https://www.googleapis.com/upload/drive/v3/files/${dictionaryFileId}?uploadType=multipart`, {
-            method: 'PATCH',
-            headers: {
-                'Authorization': `Bearer ${gapi.auth.getToken().access_token}`,
-            },
-            body: form,
-        });
-    } else {
-        const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${gapi.auth.getToken().access_token}`,
-            },
-            body: form,
-        });
-        const result = await response.json();
-        dictionaryFileId = result.id;
-    }
-}
-
-async function loadFileFromDrive(fileId) {
-    const response = await gapi.client.drive.files.get({
-        fileId: fileId,
-        alt: 'media'
-    });
-    return response.result;
-}
-
-function mergeData(remoteData) {
-    const localFolders = new Set(dictionary.folders.map(f => f.id));
-    remoteData.folders.forEach(remoteFolder => {
-        if (!localFolders.has(remoteFolder.id)) {
-            dictionary.folders.push(remoteFolder);
-        }
-    });
-
-    const localWords = new Set(dictionary.words.map(w => w.id));
-    remoteData.words.forEach(remoteWord => {
-        if (!localWords.has(remoteWord.id)) {
-            dictionary.words.push(remoteWord);
-        }
-    });
-
-    saveData();
-    renderFolders();
-}
-
-// Add event listeners for new buttons
-exportBtn.addEventListener('click', exportData);
-importFile.addEventListener('change', importData);
-authorizeButton.addEventListener('click', handleAuthClick);
-signoutButton.addEventListener('click', handleSignoutClick);
-
-// Запускаємо ініціалізацію додатка після завантаження DOM
-document.addEventListener('DOMContentLoaded', () => {
-    loadData();
-    renderContent('main');
-    handleClientLoad(); 
 });
