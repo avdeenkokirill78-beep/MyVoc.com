@@ -5,13 +5,13 @@ import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChang
 
 // Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyD9SsU8Vo6KZ6tVgWLgMAnFvxSjkdWFvSs",
-  authDomain: "dictionary-b9011.firebaseapp.com",
-  projectId: "dictionary-b9011",
-  storageBucket: "dictionary-b9011.firebasestorage.app",
-  messagingSenderId: "903569261596",
-  appId: "1:903569261596:web:e64458f595c84af01a4bd9",
-  measurementId: "G-44VP97P941"
+    apiKey: "AIzaSyD9SsU8Vo6KZ6tVgWLgMAnFvxSjkdWFvSs",
+    authDomain: "dictionary-b9011.firebaseapp.com",
+    projectId: "dictionary-b9011",
+    storageBucket: "dictionary-b9011.firebasestorage.app",
+    messagingSenderId: "903569261596",
+    appId: "1:903569261596:web:e64458f595c84af01a4bd9",
+    measurementId: "G-44VP97P941"
 };
 
 // Global variables and references to HTML elements
@@ -84,7 +84,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    renderContent('main');
+    onAuthStateChanged(auth, user => {
+        if (user) {
+            userId = user.uid;
+            authBtn.textContent = 'Вийти';
+            loadData();
+            loadFromFirebase();
+        } else {
+            userId = null;
+            authBtn.textContent = 'Увійти з Google';
+            dictionary = { folders: [], words: [] };
+        }
+        renderContent('main');
+    });
 });
 
 // Functions to work with data (saving and loading)
@@ -716,64 +728,104 @@ function exportData() {
 }
 
 function importData(event) {
-    console.log('Крок 1: Запущено функцію importData.');
     const file = event.target.files[0];
     if (!file) {
-        console.log('Крок 2: Файл не обрано.');
         return;
     }
-    console.log('Крок 2: Файл обрано, починаємо читання.');
 
     const reader = new FileReader();
-    reader.onload = function(e) {
-        console.log('Крок 3: Файл прочитано. Спроба розбору JSON.');
+    reader.onload = (e) => {
         try {
-            const importedData = JSON.parse(e.target.result);
-            console.log('Крок 4: JSON успішно розібрано. Перевірка формату.');
-            if (importedData && importedData.folders && importedData.words) {
-                console.log('Крок 5: Формат даних правильний.');
-                if (confirm('Ви хочете замінити існуючий словник чи додати нові дані? Натисніть "ОК", щоб замінити, або "Скасувати", щоб додати.')) {
-                    dictionary = importedData;
-                    alert('Словник успішно замінено!');
-                } else {
-                    dictionary.folders.push(...importedData.folders);
-                    dictionary.words.push(...importedData.words);
-                    alert('Дані успішно додано до словника!');
-                }
+            const importedDictionary = JSON.parse(e.target.result);
+            if (importedDictionary && importedDictionary.words && importedDictionary.folders) {
+                dictionary = importedDictionary;
                 saveData();
                 saveToFirebase();
                 renderFolders();
-                console.log('Крок 6: Дані оброблено. Функцію завершено.');
+                alert('Дані успішно імпортовано!');
             } else {
-                console.error('Крок 5: Помилка формату даних. Файл не містить об\'єктів folders або words.');
-                alert('Помилка: Некоректний формат файлу. Будь ласка, оберіть файл JSON, експортований з цього додатка.');
+                alert('Некоректний формат файлу JSON.');
             }
         } catch (error) {
-            console.error('Крок 4: Помилка при розборі JSON:', error);
-            alert('Помилка при читанні файлу. Будь ласка, переконайтесь, що це дійсний файл JSON.');
-        } finally {
-            event.target.value = '';
+            alert('Помилка при читанні файлу.');
         }
     };
     reader.readAsText(file);
 }
 
-// Firebase Auth State Listener
-onAuthStateChanged(auth, (user) => {
-    if (user) {
-        userId = user.uid;
-        authBtn.textContent = 'Вийти';
-        loadFromFirebase();
-        console.log('Користувач увійшов:', user.displayName);
+function renderSearchResults(query) {
+    const contentArea = document.getElementById('content-area'); // Виправлено ID
+    contentArea.innerHTML = `<button id="back-to-main" class="back-btn">&#8592; Назад</button><h2>Результати пошуку для "${query}"</h2>`;
+    
+    document.getElementById('back-to-main').addEventListener('click', () => {
+        renderFolders(); 
+    });
+    
+    const searchResultsList = document.createElement('div');
+    searchResultsList.id = 'search-results';
+    
+    const lowerCaseQuery = query.toLowerCase();
+    const matchingWords = dictionary.words.filter(word => 
+        (word.word && word.word.toLowerCase().includes(lowerCaseQuery)) ||
+        (word.translation && word.translation.toLowerCase().includes(lowerCaseQuery)) ||
+        (word.pronunciation && word.pronunciation.toLowerCase().includes(lowerCaseQuery))
+    );
+
+    if (matchingWords.length === 0) {
+        searchResultsList.innerHTML = `<p>Нічого не знайдено.</p>`;
     } else {
-        userId = null;
-        authBtn.textContent = 'Увійти через Google';
-        dictionary = {
-            folders: [],
-            words: []
-        };
-        saveData();
-        renderFolders();
-        console.log('Користувач вийшов.');
+        const startsWithWords = matchingWords.filter(word =>
+            (word.word && word.word.toLowerCase().startsWith(lowerCaseQuery)) ||
+            (word.translation && word.translation.toLowerCase().startsWith(lowerCaseQuery)) ||
+            (word.pronunciation && word.pronunciation.toLowerCase().startsWith(lowerCaseQuery))
+        );
+        const includesWords = matchingWords.filter(word => !startsWithWords.includes(word));
+        const sortedWords = startsWithWords.concat(includesWords);
+
+        sortedWords.forEach(word => {
+            searchResultsList.innerHTML += `
+                <div class="word-card">
+                    <h3>${word.word}</h3>
+                    <p><strong>Переклад:</strong> ${word.translation}</p>
+                    ${word.pronunciation ? `<p><strong>Вимова:</strong> ${word.pronunciation}</p>` : ''}
+                    ${word.synonyms ? `<p><strong>Синоніми:</strong> ${word.synonyms}</p>` : ''}
+                    ${word.sentence ? `<p><strong>Речення:</strong> ${word.sentence}</p>` : ''}
+                    ${word.antonyms ? `<p><strong>Антоніми:</strong> ${word.antonyms}</p>` : ''}
+                    <p><strong>Статус:</strong> ${word.learned ? 'Вивчене ✅' : 'Невивчене ❌'}</p>
+                    <div class="word-card-actions">
+                        <button class="toggle-learned-btn" data-word-id="${word.id}">${word.learned ? 'Зробити невивченим' : 'Зробити вивченим'}</button>
+                        <button class="edit-word-btn" data-word-id="${word.id}">Редагувати</button>
+                        <button class="delete-word-btn" data-word-id="${word.id}">Видалити слово</button>
+                    </div>
+                </div>
+            `;
+        });
+        
+        searchResultsList.querySelectorAll('.edit-word-btn').forEach(button => {
+            button.addEventListener('click', (event) => {
+                const wordIdToEdit = event.target.dataset.wordId;
+                editWordForm(wordIdToEdit);
+            });
+        });
+        searchResultsList.querySelectorAll('.delete-word-btn').forEach(button => {
+            button.addEventListener('click', (event) => {
+                const wordIdToDelete = event.target.dataset.wordId;
+                const wordToDelete = dictionary.words.find(w => w.id == wordIdToDelete);
+                if (wordToDelete) {
+                    deleteWord(wordIdToDelete, wordToDelete.folderId);
+                } else {
+                    renderSearchResults(query);
+                }
+            });
+        });
+        searchResultsList.querySelectorAll('.toggle-learned-btn').forEach(button => {
+            button.addEventListener('click', (event) => {
+                const wordIdToToggle = event.target.dataset.wordId;
+                toggleLearnedStatus(wordIdToToggle);
+                renderSearchResults(query);
+            });
+        });
     }
-});
+
+    contentArea.appendChild(searchResultsList);
+}
